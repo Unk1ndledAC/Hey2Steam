@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secrets — never commit credentials
+.env
+*.env
+!.env.example
+
+# Outputs / runtime
+*.log
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/

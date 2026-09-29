@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hey2Steam — Sync your HeyBox wishlist to Steam</title>
+<meta name="description" content="Sync your HeyBox (小黑盒) game wishlist into your Steam wishlist.">
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2430; --bd:#30363d;
+  --text:#e6edf3; --t2:#9aa7b4; --t3:#6b7684;
+  --accent:#66c0f4; --accent-h:#8fd4ff; --accent-dim:rgba(102,192,244,.12);
+  --green:#3fb950; --red:#f85149; --amber:#d29922;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-h);text-decoration:underline}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;max-width:1080px;margin:0 auto;padding:20px 20px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15em;letter-spacing:.3px}
+.brand .logo{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#2e7fba);display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#04121c}
+.lang-switch{display:inline-flex;background:var(--panel2);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.lang-switch button{background:transparent;border:none;color:var(--t2);padding:7px 14px;font-size:.85em;font-weight:600;cursor:pointer;font-family:inherit}
+.lang-switch button.active{background:var(--accent);color:#04121c}
+.lang-switch button:hover:not(.active){color:var(--text)}
+
+.hero{text-align:center;padding:48px 20px 26px}
+.hero h1{font-size:clamp(2em,6vw,3.2em);font-weight:800;letter-spacing:-.5px;background:linear-gradient(90deg,var(--text),var(--accent));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero .tag{color:var(--t2);margin-top:10px;font-size:1.08em}
+.hero .sub{color:var(--t3);margin-top:6px;font-size:.9em}
+
+.container{max-width:880px;margin:0 auto;padding:0 20px}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:14px;padding:26px;margin-bottom:22px}
+.card h2{font-size:1.05em;font-weight:700;margin-bottom:16px;color:var(--text)}
+.card h2 .hint{font-weight:400;color:var(--t3);font-size:.8em}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field.full{grid-column:1/-1}
+.field label{font-size:.82em;font-weight:600;color:var(--t2)}
+.field label .opt{color:var(--t3);font-weight:400}
+.field input,.field select{background:var(--panel2);border:1px solid var(--bd);border-radius:8px;padding:11px 12px;color:var(--text);font-size:.95em;font-family:inherit;outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field input::placeholder{color:var(--t3)}
+.field .help{font-size:.78em;color:var(--t3);line-height:1.45}
+
+.btn-sync{width:100%;margin-top:20px;padding:14px;font-size:1.05em;font-weight:700;font-family:inherit;background:var(--accent);color:#04121c;border:none;border-radius:9px;cursor:pointer;transition:background .15s,opacity .15s}
+.btn-sync:hover{background:var(--accent-h)}
+.btn-sync:disabled{opacity:.55;cursor:not-allowed}
+
+.check-row{display:flex;align-items:center;gap:8px;margin-top:14px}
+.check-row input{width:16px;height:16px;accent-color:var(--accent)}
+.check-row label{font-size:.85em;color:var(--t2);cursor:pointer}
+
+details.advanced{margin-top:16px;border-top:1px dashed var(--bd);padding-top:14px}
+details.advanced summary{cursor:pointer;color:var(--t2);font-size:.88em;font-weight:600;user-select:none}
+details.advanced summary:hover{color:var(--text)}
+details.advanced .form-grid{margin-top:14px}
+
+.notice{display:none;background:var(--amber);color:#2b1a05;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:.9em;line-height:1.5}
+.notice.show{display:block}
+.notice code{background:rgba(0,0,0,.12);padding:1px 6px;border-radius:4px;font-size:.9em}
+
+.status{display:none;align-items:center;gap:10px;color:var(--t2);font-size:.92em;padding:14px 2px}
+.status.show{display:flex}
+.spin{width:18px;height:18px;border:2px solid var(--bd);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.results{display:none;margin-top:4px}
+.results.show{display:block}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--panel2);border:1px solid var(--bd);border-radius:10px;padding:14px;text-align:center}
+.stat .n{font-size:1.6em;font-weight:800;color:var(--accent)}
+.stat .l{font-size:.72em;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.list-title{font-size:.85em;font-weight:700;color:var(--t2);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.5px}
+.game-list{list-style:none;max-height:280px;overflow-y:auto;border:1px solid var(--bd);border-radius:10px}
+.game-list li{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.6);font-size:.88em}
+.game-list li:last-child{border-bottom:none}
+.game-list .nm{color:var(--text)}
+.game-list .id{color:var(--t3);font-size:.85em;font-family:ui-monospace,monospace}
+.game-list li.ok .nm{color:var(--green)}
+.game-list li.fail .nm{color:var(--red)}
+.game-list li.fail .err{font-size:.78em;color:var(--red);margin-top:1px}
+.empty-msg{color:var(--t3);font-size:.88em;padding:12px 0}
+
+.how{margin-bottom:60px}
+.how h2{font-size:1.3em;text-align:center;margin-bottom:6px}
+.how .hs{text-align:center;color:var(--t3);font-size:.9em;margin-bottom:26px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+.step{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:20px}
+.step .n{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--accent-dim);color:var(--accent);font-weight:800;margin-bottom:10px}
+.step h3{font-size:.98em;margin-bottom:6px}
+.step p{color:var(--t2);font-size:.86em}
+
+.help{margin-bottom:60px}
+.help h2{font-size:1.3em;text-align:center;margin-bottom:20px}
+.help-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.help-card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:20px;font-size:.88em}
+.help-card h3{font-size:.95em;margin-bottom:10px;color:var(--accent)}
+.help-card ol{padding-left:20px;color:var(--t2)}
+.help-card ol li{margin-bottom:8px}
+.help-card code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:.88em;color:var(--text)}
+
+footer{border-top:1px solid var(--bd);padding:30px 20px;text-align:center;color:var(--t3);font-size:.82em}
+footer .disc{max-width:640px;margin:10px auto 0;font-size:.78em;opacity:.75}
+
+@media(max-width:640px){
+  .form-grid{grid-template-columns:1fr}
+  .help-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="logo">H2S</span><span>Hey2Steam</span></div>
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button id="lang-en" data-lang="en">EN</button>
+    <button id="lang-zh" data-lang="zh">中文</button>
+  </div>
+</div>
+
+<header class="hero">
+  <h1>Hey2Steam</h1>
+  <p class="tag" data-i18n="subtitle">Sync your HeyBox wishlist to Steam</p>
+  <p class="sub" data-i18n="subtext">Fetch your 小黑盒 (HeyBox) game wishlist and batch-add the games to your Steam wishlist.</p>
+</header>
+
+<div class="container">
+  <div id="notice" class="notice"></div>
+
+  <section class="card">
+    <h2 data-i18n="formTitle">Sync settings <span class="hint" data-i18n="formHint">— credentials are sent only to the backend, never stored</span></h2>
+    <div class="form-grid">
+      <div class="field">
+        <label data-i18n="heyboxIdLabel">HeyBox User ID</label>
+        <input id="heybox_id" type="text" inputmode="numeric" autocomplete="off" data-i18n-ph="heyboxIdPh" placeholder="e.g. 12345678">
+        <div class="help" data-i18n="heyboxIdHelp">Your numeric HeyBox ID (shown in your HeyBox profile / API requests).</div>
+      </div>
+      <div class="field">
+        <label data-i18n="steamIdLabel">Steam ID (SteamID64)</label>
+        <input id="steamid" type="text" inputmode="numeric" autocomplete="off" data-i18n-ph="steamIdPh" placeholder="e.g. 7656119xxxxxxxxxx">
+        <div class="help" data-i18n="steamIdHelp">The 17-digit SteamID64 that owns the destination wishlist.</div>
+      </div>
+      <div class="field full">
+        <label data-i18n="tokenLabel">Steam Access Token <span class="opt" data-i18n="tokenOpt">(webapi_token — required to write)</span></label>
+        <input id="steam_access_token" type="password" autocomplete="off" data-i18n-ph="tokenPh" placeholder="webapi_token value">
+        <div class="help" data-i18n="tokenHelp">Log into Steam → open <code>store.steampowered.com/pointssummary/ajaxgetasyncconfig</code> → copy the <code>webapi_token</code>. Expires ~24h.</div>
+      </div>
+    </div>
+
+    <div class="check-row">
+      <input id="dry_run" type="checkbox">
+      <label for="dry_run" data-i18n="dryRun">Dry run (preview the diff only, write nothing)</label>
+    </div>
+
+    <details class="advanced">
+      <summary data-i18n="advanced">Advanced options</summary>
+      <div class="form-grid">
+        <div class="field">
+          <label data-i18n="apiKeyLabel">Steam API Key <span class="opt" data-i18n="optTag">(optional)</span></label>
+          <input id="steam_api_key" type="password" autocomplete="off" data-i18n-ph="apiKeyPh" placeholder="optional">
+        </div>
+        <div class="field">
+          <label data-i18n="imeiLabel">HeyBox Device ID <span class="opt" data-i18n="optTag">(optional)</span></label>
+          <input id="imei" type="text" autocomplete="off" data-i18n-ph="imeiPh" placeholder="auto-generated if empty">
+        </div>
+        <div class="field">
+          <label data-i18n="algoLabel">HeyBox signature</label>
+          <select id="sign_algo">
+            <option value="web" selected>web</option>
+            <option value="chat">chat</option>
+          </select>
+        </div>
+        <div class="field">
+          <label data-i18n="backendLabel">Backend URL <span class="opt" data-i18n="optTag">(optional)</span></label>
+          <input id="backend_url" type="text" autocomplete="off" data-i18n-ph="backendPh" placeholder="same origin / e.g. http://127.0.0.1:5091">
+        </div>
+      </div>
+    </details>
+
+    <button id="sync_btn" class="btn-sync" data-i18n="syncBtn">Sync wishlist</button>
+  </section>
+
+  <div id="status" class="status"><span class="spin"></span><span id="status_text" data-i18n="statusIdle">Ready</span></div>
+
+  <div id="results" class="results">
+    <div class="summary">
+      <div class="stat"><div class="n" id="r_total">0</div><div class="l" data-i18n="rTotal">HeyBox wishlist</div></div>
+      <div class="stat"><div class="n" id="r_already">0</div><div class="l" data-i18n="rAlready">Already on Steam</div></div>
+      <div class="stat"><div class="n" id="r_added">0</div><div class="l" data-i18n="rAdded">Added</div></div>
+      <div class="stat"><div class="n" id="r_failed">0</div><div class="l" data-i18n="rFailed">Failed</div></div>
+    </div>
+    <div id="added_wrap">
+      <div class="list-title" data-i18n="rAddedTitle">Added games</div>
+      <ul id="added_list" class="game-list"></ul>
+    </div>
+    <div id="failed_wrap">
+      <div class="list-title" data-i18n="rFailedTitle">Failed</div>
+      <ul id="failed_list" class="game-list"></ul>
+    </div>
+  </div>
+
+  <section class="how">
+    <h2 data-i18n="howTitle">How it works</h2>
+    <p class="hs" data-i18n="howSub">Three steps, one click</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3 data-i18n="s1t">Fetch</h3><p data-i18n="s1d">Pull the HeyBox wishlist for the given user ID.</p></div>
+      <div class="step"><div class="n">2</div><h3 data-i18n="s2t">Compare</h3><p data-i18n="s2d">Diff against the current Steam wishlist to find missing games.</p></div>
+      <div class="step"><div class="n">3</div><h3 data-i18n="s3t">Sync</h3><p data-i18n="s3d">Add each missing game to Steam using your access token.</p></div>
+    </div>
+  </section>
+
+  <section class="help">
+    <h2 data-i18n="helpTitle">Where do I get these credentials?</h2>
+    <div class="help-grid">
+      <div class="help-card">
+        <h3 data-i18n="helpSteamH">Steam</h3>
+        <ol>
+          <li data-i18n="helpSteam1">SteamID64 — from <code>steamid.io</code> or your profile URL.</li>
+          <li data-i18n="helpSteam2">Access token — log into Steam, open the <code>pointssummary/ajaxgetasyncconfig</code> page, copy <code>webapi_token</code>.</li>
+          <li data-i18n="helpSteam3">API key (optional) — <code>steamcommunity.com/dev/apikey</code>.</li>
+        </ol>
+      </div>
+      <div class="help-card">
+        <h3 data-i18n="helpHeyboxH">HeyBox (小黑盒)</h3>
+        <ol>
+          <li data-i18n="helpHeybox1">User ID — the numeric ID in your HeyBox profile or API requests.</li>
+          <li data-i18n="helpHeybox2">The wishlist must be public; otherwise a <code>pkey</code> login credential is needed (backend only).</li>
+          <li data-i18n="helpHeybox3">Signature is computed automatically (<code>web</code> or <code>chat</code>).</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div><a href="https://github.com/Unk1ndledAC/Hey2Steam" target="_blank" rel="noopener">Star on GitHub</a></div>
+  <div class="disc" data-i18n="disclaimer">Not affiliated with HeyBox or Valve/Steam. Uses unofficial APIs that may change without notice. Credentials are sent directly to the backend and are never persisted.</div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+// ---------------------------------------------------------------------------
+// i18n
+// ---------------------------------------------------------------------------
+var I18N = {
+  en: {
+    subtitle: "Sync your HeyBox wishlist to Steam",
+    subtext: "Fetch your 小黑盒 (HeyBox) game wishlist and batch-add the games to your Steam wishlist.",
+    formTitle: "Sync settings",
+    formHint: "credentials are sent only to the backend, never stored",
+    heyboxIdLabel: "HeyBox User ID",
+    heyboxIdPh: "e.g. 12345678",
+    heyboxIdHelp: "Your numeric HeyBox ID (shown in your HeyBox profile / API requests).",
+    steamIdLabel: "Steam ID (SteamID64)",
+    steamIdPh: "e.g. 7656119xxxxxxxxxx",
+    steamIdHelp: "The 17-digit SteamID64 that owns the destination wishlist.",
+    tokenLabel: "Steam Access Token",
+    tokenOpt: "(webapi_token — required to write)",
+    tokenPh: "webapi_token value",
+    tokenHelp: "Log into Steam → open store.steampowered.com/pointssummary/ajaxgetasyncconfig → copy the webapi_token. Expires ~24h.",
+    dryRun: "Dry run (preview the diff only, write nothing)",
+    advanced: "Advanced options",
+    apiKeyLabel: "Steam API Key",
+    imeiLabel: "HeyBox Device ID",
+    algoLabel: "HeyBox signature",
+    backendLabel: "Backend URL",
+    optTag: "(optional)",
+    apiKeyPh: "optional",
+    imeiPh: "auto-generated if empty",
+    backendPh: "same origin / e.g. http://127.0.0.1:5091",
+    syncBtn: "Sync wishlist",
+    statusIdle: "Ready",
+    statusBackend: "Connecting to backend…",
+    statusFetching: "Fetching HeyBox wishlist…",
+    statusSteam: "Fetching Steam wishlist…",
+    statusAdding: "Adding missing games…",
+    statusDone: "Done",
+    rTotal: "HeyBox wishlist",
+    rAlready: "Already on Steam",
+    rAdded: "Added",
+    rFailed: "Failed",
+    rAddedTitle: "Added games",
+    rFailedTitle: "Failed",
+    emptyAdded: "Nothing new to add — your Steam wishlist is already up to date.",
+    howTitle: "How it works",
+    howSub: "Three steps, one click",
+    s1t: "Fetch", s1d: "Pull the HeyBox wishlist for the given user ID.",
+    s2t: "Compare", s2d: "Diff against the current Steam wishlist to find missing games.",
+    s3t: "Sync", s3d: "Add each missing game to Steam using your access token.",
+    helpTitle: "Where do I get these credentials?",
+    helpSteamH: "Steam",
+    helpSteam1: "SteamID64 — from steamid.io or your profile URL.",
+    helpSteam2: "Access token — log into Steam, open the pointssummary/ajaxgetasyncconfig page, copy webapi_token.",
+    helpSteam3: "API key (optional) — steamcommunity.com/dev/apikey.",
+    helpHeyboxH: "HeyBox (小黑盒)",
+    helpHeybox1: "User ID — the numeric ID in your HeyBox profile or API requests.",
+    helpHeybox2: "The wishlist must be public; otherwise a pkey login credential is needed (backend only).",
+    helpHeybox3: "Signature is computed automatically (web or chat).",
+    disclaimer: "Not affiliated with HeyBox or Valve/Steam. Uses unofficial APIs that may change without notice. Credentials are sent directly to the backend and are never persisted.",
+    errNoBackend: "No backend detected. Run <code>python app.py</code> in the Hey2Steam project and open <code>http://localhost:5091</code>, or enter your backend URL under Advanced options.",
+    errMissing: "HeyBox User ID and Steam ID are required.",
+    errGeneric: "Sync failed: ",
+    dryRunNotice: "Dry-run mode: showing what would be added without writing anything."
+  },
+  zh: {
+    subtitle: "将你的小黑盒心愿单同步到 Steam",
+    subtext: "拉取小黑盒（HeyBox）游戏心愿单，并将这些游戏批量加入你的 Steam 心愿单。",
+    formTitle: "同步设置",
+    formHint: "凭据只发送到后端，绝不存储",
+    heyboxIdLabel: "小黑盒用户 ID",
+    heyboxIdPh: "例如 12345678",
+    heyboxIdHelp: "你的数字小黑盒 ID（在个人主页 / API 请求中可见）。",
+    steamIdLabel: "Steam ID（SteamID64）",
+    steamIdPh: "例如 7656119xxxxxxxxxx",
+    steamIdHelp: "拥有目标心愿单的 17 位 SteamID64。",
+    tokenLabel: "Steam 访问令牌",
+    tokenOpt: "（webapi_token — 写入必需）",
+    tokenPh: "webapi_token 值",
+    tokenHelp: "登录 Steam → 打开 store.steampowered.com/pointssummary/ajaxgetasyncconfig → 复制 webapi_token。约 24 小时过期。",
+    dryRun: "演练（仅预览差异，不写入任何内容）",
+    advanced: "高级选项",
+    apiKeyLabel: "Steam API Key",
+    imeiLabel: "小黑盒设备 ID",
+    algoLabel: "小黑盒签名算法",
+    backendLabel: "后端地址",
+    optTag: "（可选）",
+    apiKeyPh: "可选",
+    imeiPh: "留空则自动生成",
+    backendPh: "同源 / 例如 http://127.0.0.1:5091",
+    syncBtn: "同步心愿单",
+    statusIdle: "就绪",
+    statusBackend: "正在连接后端…",
+    statusFetching: "正在获取小黑盒心愿单…",
+    statusSteam: "正在获取 Steam 心愿单…",
+    statusAdding: "正在添加缺失的游戏…",
+    statusDone: "完成",
+    rTotal: "小黑盒心愿单",
+    rAlready: "已在 Steam",
+    rAdded: "已添加",
+    rFailed: "失败",
+    rAddedTitle: "已添加的游戏",
+    rFailedTitle: "失败",
+    emptyAdded: "没有需要新增的游戏 — 你的 Steam 心愿单已是最新。",
+    howTitle: "工作原理",
+    howSub: "三步，一键完成",
+    s1t: "获取", s1d: "根据用户 ID 拉取小黑盒心愿单。",
+    s2t: "比对", s2d: "与当前 Steam 心愿单比对，找出缺失游戏。",
+    s3t: "同步", s3d: "使用访问令牌把缺失游戏加入 Steam。",
+    helpTitle: "这些凭据从哪里获取？",
+    helpSteamH: "Steam",
+    helpSteam1: "SteamID64 — 从 steamid.io 或你的个人主页 URL 获取。",
+    helpSteam2: "访问令牌 — 登录 Steam，打开 pointssummary/ajaxgetasyncconfig 页面，复制 webapi_token。",
+    helpSteam3: "API key（可选）— steamcommunity.com/dev/apikey。",
+    helpHeyboxH: "小黑盒（HeyBox）",
+    helpHeybox1: "用户 ID — 个人主页或 API 请求中的数字 ID。",
+    helpHeybox2: "心愿单必须为公开；否则需要 pkey 登录凭据（仅后端支持）。",
+    helpHeybox3: "签名自动计算（web 或 chat）。",
+    disclaimer: "与小黑盒、Valve/Steam 无关。使用非官方接口，可能随时变动。凭据直接发送到后端，绝不持久化。",
+    errNoBackend: "未检测到后端。请在 Hey2Steam 项目中运行 <code>python app.py</code> 并打开 <code>http://localhost:5091</code>，或在「高级选项」中填写你的后端地址。",
+    errMissing: "小黑盒用户 ID 和 Steam ID 为必填项。",
+    errGeneric: "同步失败：",
+    dryRunNotice: "演练模式：仅展示将要添加的内容，不写入任何内容。"
+  }
+};
+
+var currentLang = localStorage.getItem("hey2steam_lang") || "en";
+
+function t(key){ return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key; }
+
+function setLang(lang){
+  currentLang = lang;
+  localStorage.setItem("hey2steam_lang", lang);
+  document.documentElement.lang = (lang === "zh") ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i18n]").forEach(function(el){
+    var k = el.getAttribute("data-i18n");
+    if (k) el.innerHTML = t(k);
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(function(el){
+    el.setAttribute("placeholder", t(el.getAttribute("data-i18n-ph")));
+  });
+  document.getElementById("lang-en").classList.toggle("active", lang === "en");
+  document.getElementById("lang-zh").classList.toggle("active", lang === "zh");
+  // Re-render notices/results that are language-dependent.
+  if (lastNoticeKey) showNotice(lastNoticeKey);
+}
+
+// ---------------------------------------------------------------------------
+// DOM helpers
+// ---------------------------------------------------------------------------
+function $(id){ return document.getElementById(id); }
+function val(id){ return $(id).value.trim(); }
+
+var lastNoticeKey = null;
+function showNotice(key){
+  lastNoticeKey = key;
+  var el = $("notice");
+  if (!key){ el.classList.remove("show"); return; }
+  el.innerHTML = t(key);
+  el.classList.add("show");
+}
+function clearNotice(){ showNotice(null); }
+
+function setStatus(key){
+  $("status").classList.add("show");
+  $("status_text").textContent = t(key);
+}
+function hideStatus(){ $("status").classList.remove("show"); }
+
+function resetResults(){
+  $("results").classList.remove("show");
+  $("added_list").innerHTML = "";
+  $("failed_list").innerHTML = "";
+  $("r_total").textContent = "0";
+  $("r_already").textContent = "0";
+  $("r_added").textContent = "0";
+  $("r_failed").textContent = "0";
+  $("added_wrap").style.display = "none";
+  $("failed_wrap").style.display = "none";
+}
+
+function renderItem(item, cls){
+  var li = document.createElement("li");
+  li.className = cls;
+  var nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = item.name || ("appid " + item.appid);
+  var id = document.createElement("span");
+  id.className = "id";
+  id.textContent = "appid " + item.appid;
+  li.appendChild(nm);
+  li.appendChild(id);
+  if (cls === "fail" && item.error){
+    var err = document.createElement("div");
+    err.className = "err";
+    err.textContent = item.error;
+    li.appendChild(err);
+  }
+  return li;
+}
+
+function showReport(r){
+  $("results").classList.add("show");
+  $("r_total").textContent = r.heybox_total;
+  $("r_already").textContent = r.already_on_steam;
+  var addedCount = (r.added || []).length;
+  var failedCount = (r.failed || []).length;
+  $("r_added").textContent = addedCount;
+  $("r_failed").textContent = failedCount;
+
+  var addedList = $("added_list");
+  addedList.innerHTML = "";
+  if (addedCount){
+    $("added_wrap").style.display = "block";
+    (r.added || []).forEach(function(it){ addedList.appendChild(renderItem(it, "ok")); });
+  } else {
+    $("added_wrap").style.display = "none";
+  }
+
+  var failedList = $("failed_list");
+  failedList.innerHTML = "";
+  if (failedCount){
+    $("failed_wrap").style.display = "block";
+    (r.failed || []).forEach(function(it){ failedList.appendChild(renderItem(it, "fail")); });
+  } else {
+    $("failed_wrap").style.display = "none";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backend
+// ---------------------------------------------------------------------------
+function backendBase(){
+  var u = val("backend_url");
+  if (!u) return "";
+  return u.replace(/\/+$/, "");
+}
+
+function detectBackend(){
+  return fetch(backendBase() + "/api/health", { method: "GET" })
+    .then(function(r){ return r.ok; })
+    .catch(function(){ return false; });
+}
+
+function buildPayload(){
+  return {
+    heybox_id: val("heybox_id"),
+    steamid: val("steamid"),
+    steam_access_token: val("steam_access_token"),
+    steam_api_key: val("steam_api_key"),
+    steam_sessionid: null,
+    heybox_imei: val("imei"),
+    heybox_pkey: null,
+    sign_algo: val("sign_algo") || "web",
+    dry_run: $("dry_run").checked
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Sync
+// ---------------------------------------------------------------------------
+async function runSync(){
+  clearNotice();
+  resetResults();
+
+  if (!val("heybox_id") || !val("steamid")){
+    showNotice("errMissing");
+    return;
+  }
+  if ($("dry_run").checked){ showNotice("dryRunNotice"); }
+
+  var btn = $("sync_btn");
+  btn.disabled = true;
+  setStatus("statusBackend");
+
+  try{
+    var hasBackend = await detectBackend();
+    if (!hasBackend){
+      btn.disabled = false;
+      hideStatus();
+      showNotice("errNoBackend");
+      return;
+    }
+
+    setStatus("statusFetching");
+    var resp = await fetch(backendBase() + "/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload())
+    });
+
+    var data;
+    try{ data = await resp.json(); }
+    catch(e){ throw new Error("HTTP " + resp.status); }
+
+    if (!resp.ok){
+      throw new Error(data && data.error ? data.error : ("HTTP " + resp.status));
+    }
+
+    showReport(data);
+    setStatus("statusDone");
+    setTimeout(hideStatus, 1200);
+  }catch(err){
+    showNotice(null);
+    var el = $("notice");
+    el.innerHTML = t("errGeneric") + escapeHtml(String(err && err.message ? err.message : err));
+    el.classList.add("show");
+    hideStatus();
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+document.getElementById("lang-en").addEventListener("click", function(){ setLang("en"); });
+document.getElementById("lang-zh").addEventListener("click", function(){ setLang("zh"); });
+$("sync_btn").addEventListener("click", runSync);
+document.querySelectorAll("input").forEach(function(inp){
+  inp.addEventListener("keydown", function(e){ if (e.key === "Enter") runSync(); });
+});
+
+setLang(currentLang);
+resetResults();
+})();
+</script>
+</body>
+</html>
