@@ -1,13 +1,20 @@
 """HeyBox (xiaohiehe) wishlist client.
 
-Fetches a user's game wishlist from the HeyBox web API. The endpoint requires
-a valid ``hkey`` signature (see :mod:`hey2steam.signing`) plus the target
-user's ``heybox_id``.
+The HeyBox web API does not expose a user's wishlist as a single endpoint.
+Instead, each game's follow state is public per ``heybox_id`` and can be
+queried in bulk via ``/game/get_game_infos``. A user's wishlist is therefore
+recovered by scanning the Steam app list and keeping every game whose
+``follow_state`` is ``"following"``.
+
+That scan needs the full Steam app list as input. It can be supplied directly
+(``appids``), loaded from a local cache (``data/steam_games.json``, refreshed
+by the daily GitHub workflow), or fetched live via ``steam.get_app_list``.
 """
 
+import json
 import random
 import string
-import urllib.parse
+from pathlib import Path
 
 import requests
 
@@ -15,7 +22,10 @@ from . import config, signing
 from .errors import HeyBoxError
 
 HEYBOX_BASE = "https://api.xiaoheihe.cn"
-WISHLIST_PATH = "/game/get_game_list_v3"
+GAME_INFOS_PATH = "/game/get_game_infos"
+
+# Number of appids to query per /game/get_game_infos request.
+BATCH_SIZE = 200
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -32,44 +42,6 @@ def _random_device_id():
     return "".join(random.choices(string.hexdigits.lower(), k=32))
 
 
-def _build_url(heybox_id, imei, sign_algo):
-    """Construct the signed wishlist request URL."""
-    sig = signing.create_signature(WISHLIST_PATH, sign_algo)
-    params = {
-        "filter_tag": "all",
-        "sort_type": "heybox_wish",
-        "filter_platform": "all",
-        "only_chinese": "0",
-        "filter_release": "all",
-        "filter_steam_deck": "all",
-        "filter_version": "all",
-        "filter_head": "pc",
-        "show_dlc": "0",
-        "filter_os": "all",
-        "filter_family_share": "all",
-        "filter_library": "no",
-        "offset": "0",
-        "limit": "500",
-        "heybox_id": str(heybox_id),
-        "imei": imei,
-        "device_info": "Chrome",
-        "nonce": sig["nonce"],
-        "hkey": sig["hkey"],
-        "os_type": "web",
-        "x_os_type": "Windows",
-        "x_client_type": "web",
-        "os_version": "13",
-        "version": "999.0.4",
-        "build": "883",
-        "_time": str(sig["_time"]),
-        "dw": "393",
-        "channel": "heybox_google",
-        "x_app": "heybox",
-    }
-    query = urllib.parse.urlencode(params)
-    return f"{HEYBOX_BASE}{WISHLIST_PATH}/?{query}"
-
-
 def _as_int(value):
     """Coerce a value to int, returning None if it is not numeric."""
     try:
@@ -78,84 +50,46 @@ def _as_int(value):
         return None
 
 
-def _extract_appid(item):
-    """Best-effort extraction of the Steam appid from a HeyBox game object.
+def _normalize_appids(appids):
+    """Return a list of int appids from an int/``{appid, name}`` iterable."""
+    ids = []
+    for item in appids or []:
+        value = item.get("appid") if isinstance(item, dict) else item
+        value = _as_int(value)
+        if value:
+            ids.append(value)
+    return ids
 
-    HeyBox exposes the Steam appid under several possible keys. We try them
-    in order of confidence and return the first numeric value found.
+
+def get_game_infos(appids, heybox_id, device_id, sign_algo, cookies, timeout):
+    """Batch-query the follow state of ``appids`` for ``heybox_id``.
+
+    Returns a dict ``{appid: (follow_state, name)}``. The endpoint is public
+    (no login required); ``cookies`` is passed through for completeness.
     """
-    for key in ("steam_appid", "appid", "steam_id", "steam_app_id"):
-        if key in item:
-            value = _as_int(item.get(key))
-            if value:
-                return value
-    return None
-
-
-def _extract_name(item):
-    for key in ("game_name", "name", "title", "english_name"):
-        value = item.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ""
-
-
-def _parse_wishlist(data):
-    """Parse a ``get_game_list_v3`` response into a list of ``{appid, name}``."""
-    if not isinstance(data, dict):
-        raise HeyBoxError("Unexpected HeyBox response: not a JSON object")
-
-    result = data.get("result", data)
-    games = None
-
-    if isinstance(result, dict):
-        for key in ("games", "game_list", "list", "items"):
-            candidate = result.get(key)
-            if isinstance(candidate, list):
-                games = candidate
-                break
-    elif isinstance(result, list):
-        games = result
-
-    if games is None:
-        games = []
-
-    items = []
-    for game in games:
-        if not isinstance(game, dict):
-            continue
-        appid = _extract_appid(game)
-        if appid:
-            items.append({"appid": appid, "name": _extract_name(game), "raw": game})
-    return items
-
-
-def fetch_wishlist(
-    heybox_id,
-    imei=None,
-    pkey=None,
-    sign_algo=None,
-    timeout=20,
-):
-    """Fetch and parse the HeyBox wishlist for ``heybox_id``.
-
-    ``imei`` is an optional device identifier; a random one is generated when
-    omitted. ``pkey`` is only needed when the wishlist is private (it is sent
-    as a cookie when provided).
-    """
-    if not heybox_id:
-        raise HeyBoxError("heybox_id is required")
-
-    algo = sign_algo or config.get("HEYBOX_SIGN_ALGO", "web")
-    device_id = imei or config.get("HEYBOX_IMEI") or _random_device_id()
-
-    cookies = {}
-    if pkey:
-        cookies["pkey"] = pkey
-
-    url = _build_url(heybox_id, device_id, algo)
+    sig = signing.create_signature(GAME_INFOS_PATH, sign_algo)
+    params = {
+        "os_type": "web",
+        "app": "heybox",
+        "client_type": "web",
+        "version": "999.0.4",
+        "web_version": "2.5",
+        "x_client_type": "web",
+        "x_app": "heybox_website",
+        "heybox_id": str(heybox_id),
+        "x_os_type": "Windows",
+        "device_info": "Chrome",
+        "device_id": device_id,
+        "hkey": sig["hkey"],
+        "_time": str(sig["_time"]),
+        "nonce": sig["nonce"],
+        "appids": ",".join(str(a) for a in appids),
+    }
+    url = f"{HEYBOX_BASE}{GAME_INFOS_PATH}"
     try:
-        resp = requests.get(url, headers=DEFAULT_HEADERS, cookies=cookies, timeout=timeout)
+        resp = requests.get(
+            url, params=params, headers=DEFAULT_HEADERS, cookies=cookies, timeout=timeout
+        )
     except requests.RequestException as exc:
         raise HeyBoxError(f"HeyBox request failed: {exc}") from exc
 
@@ -167,10 +101,100 @@ def fetch_wishlist(
     except ValueError as exc:
         raise HeyBoxError("HeyBox returned non-JSON content") from exc
 
-    # Some errors are returned with a 200 status and a non-"ok" status field.
-    status = data.get("status") if isinstance(data, dict) else None
-    if status is not None and status != "ok":
-        msg = data.get("msg") or data.get("message") or status
-        raise HeyBoxError(f"HeyBox API error: {msg}")
+    result = data.get("result") or {}
+    base_infos = result.get("base_infos") or []
+    out = {}
+    for info in base_infos:
+        if not isinstance(info, dict):
+            continue
+        appid = _as_int(info.get("steam_appid", info.get("appid")))
+        if not appid:
+            continue
+        out[appid] = (info.get("follow_state"), info.get("name", ""))
+    return out
 
-    return _parse_wishlist(data)
+
+def load_cached_games(path=None):
+    """Load cached Steam games (``{appid, name}``) from ``data/steam_games.json``.
+
+    Returns a list of ``{appid, name}`` dicts, or ``None`` when the cache is
+    missing or unreadable. Used to resolve game names for the diff view.
+    """
+    path = Path(path) if path else config.PROJECT_ROOT / "data" / "steam_games.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+    apps = data.get("apps") if isinstance(data, dict) else data
+    out = []
+    for item in apps or []:
+        if not isinstance(item, dict):
+            continue
+        appid = _as_int(item.get("appid"))
+        if not appid:
+            continue
+        out.append({"appid": appid, "name": item.get("name", "")})
+    return out or None
+
+
+def load_cached_appids(path=None):
+    """Load cached Steam appids from ``data/steam_games.json``.
+
+    Returns a list of int appids, or ``None`` when the cache is missing or
+    unreadable. The cache is produced by ``scripts/update_game_list.py``.
+    """
+    games = load_cached_games(path)
+    if games is None:
+        return None
+    return [g["appid"] for g in games]
+
+
+def fetch_wishlist(
+    heybox_id,
+    appids=None,
+    imei=None,
+    pkey=None,
+    sign_algo=None,
+    timeout=20,
+):
+    """Fetch the HeyBox wishlist for ``heybox_id``.
+
+    The wishlist is recovered by scanning ``appids`` (the Steam app list) and
+    keeping every game whose ``follow_state`` is ``"following"``. When
+    ``appids`` is ``None``, the local cache ``data/steam_games.json`` is used;
+    if that is also absent an error is raised (provide ``appids`` or run the
+    daily update script / pass a Steam API key to the caller).
+
+    ``imei`` is an optional device id (auto-generated when omitted). ``pkey``
+    is only needed for private data and is sent as a cookie when provided.
+    """
+    if not heybox_id:
+        raise HeyBoxError("heybox_id is required")
+
+    if appids is None:
+        appids = load_cached_appids()
+    ids = _normalize_appids(appids)
+    if not ids:
+        raise HeyBoxError(
+            "No Steam app list available to scan. Provide appids, or run the "
+            "daily update script (scripts/update_game_list.py), or pass a "
+            "Steam API key so the app list can be fetched live."
+        )
+
+    algo = sign_algo or config.get("HEYBOX_SIGN_ALGO", "web")
+    device_id = imei or config.get("HEYBOX_IMEI") or _random_device_id()
+
+    cookies = {}
+    if pkey:
+        cookies["pkey"] = pkey
+
+    following = []
+    for start in range(0, len(ids), BATCH_SIZE):
+        chunk = ids[start : start + BATCH_SIZE]
+        states = get_game_infos(chunk, heybox_id, device_id, algo, cookies, timeout)
+        for appid, (state, name) in states.items():
+            if state == "following":
+                following.append({"appid": appid, "name": name})
+    return following

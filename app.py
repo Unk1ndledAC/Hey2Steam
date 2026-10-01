@@ -102,7 +102,6 @@ def api_sync():
             steamid=steamid,
             steam_access_token=body.get("steam_access_token"),
             steam_api_key=body.get("steam_api_key"),
-            steam_sessionid=body.get("steam_sessionid"),
             heybox_imei=body.get("heybox_imei"),
             heybox_pkey=body.get("heybox_pkey"),
             sign_algo=body.get("sign_algo"),
@@ -111,6 +110,57 @@ def api_sync():
     except Exception as exc:  # noqa: BLE001
         return _error(str(exc), 502)
     return jsonify(report)
+
+
+@app.route("/api/diff", methods=["POST"])
+def api_diff():
+    body = _body()
+    heybox_id = (body.get("heybox_id") or "").strip()
+    steamid = (body.get("steamid") or "").strip()
+    if not heybox_id:
+        return _error("heybox_id is required", 400)
+    if not steamid:
+        return _error("steamid is required", 400)
+    try:
+        appids = sync.resolve_appids(body.get("game_appids"), body.get("steam_api_key"))
+        if not appids:
+            return _error(
+                "No Steam app list available. Provide game_appids or "
+                "steam_api_key, or run the daily update script first.",
+                400,
+            )
+        name_map = sync.build_name_map(body.get("game_appids"))
+        heybox_items = heybox.fetch_wishlist(
+            heybox_id,
+            appids=appids,
+            imei=body.get("heybox_imei"),
+            pkey=body.get("heybox_pkey"),
+            sign_algo=body.get("sign_algo"),
+        )
+        steam_appids = steam.get_wishlist(steamid, api_key=body.get("steam_api_key"))
+        diff = sync.compute_diff(heybox_items, steam_appids, name_map=name_map)
+    except Exception as exc:  # noqa: BLE001
+        return _error(str(exc), 502)
+    return jsonify(diff)
+
+
+@app.route("/api/apply", methods=["POST"])
+def api_apply():
+    body = _body()
+    to_add = body.get("to_add") or []
+    to_remove = body.get("to_remove") or []
+    if not to_add and not to_remove:
+        return _error("to_add or to_remove is required", 400)
+    try:
+        result = sync.apply_changes(
+            to_add,
+            to_remove,
+            body.get("steam_access_token"),
+            dry_run=bool(body.get("dry_run")),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _error(str(exc), 502)
+    return jsonify(result)
 
 
 if __name__ == "__main__":

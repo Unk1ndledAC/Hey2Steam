@@ -85,6 +85,13 @@ details.advanced .form-grid{margin-top:14px}
 .game-list li.fail .err{font-size:.78em;color:var(--red);margin-top:1px}
 .empty-msg{color:var(--t3);font-size:.88em;padding:12px 0}
 
+.sel-all{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;color:var(--t2);font-size:.85em;user-select:none}
+.sel-all input{width:15px;height:15px;accent-color:var(--accent);margin:0}
+.diff-item{display:flex;align-items:center;gap:10px;flex:1;cursor:pointer}
+.diff-item input{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0;margin:0}
+.diff-item .nm{flex:1}
+.diff-sub{color:var(--t3);font-size:.88em;margin:-6px 0 14px}
+
 .how{margin-bottom:60px}
 .how h2{font-size:1.3em;text-align:center;margin-bottom:6px}
 .how .hs{text-align:center;color:var(--t3);font-size:.9em;margin-bottom:26px}
@@ -144,9 +151,9 @@ footer .disc{max-width:640px;margin:10px auto 0;font-size:.78em;opacity:.75}
         <input id="steamid" type="text" inputmode="numeric" autocomplete="off" data-i18n-ph="steamIdPh" placeholder="e.g. 7656119xxxxxxxxxx">
         <div class="help" data-i18n="steamIdHelp">The 17-digit SteamID64 that owns the destination wishlist.</div>
       </div>
-      <div class="field full">
-        <label data-i18n="tokenLabel">Steam Access Token <span class="opt" data-i18n="tokenOpt">(webapi_token — required to write)</span></label>
-        <input id="steam_access_token" type="password" autocomplete="off" data-i18n-ph="tokenPh" placeholder="webapi_token value">
+      <div class="field">
+        <label data-i18n="tokenLabel">Steam Access Token <span class="opt" data-i18n="reqTag">(required to write)</span></label>
+        <input id="steam_access_token" type="password" autocomplete="off" data-i18n-ph="tokenPh" placeholder="webapi_token">
         <div class="help" data-i18n="tokenHelp">Log into Steam → open <code>store.steampowered.com/pointssummary/ajaxgetasyncconfig</code> → copy the <code>webapi_token</code>. Expires ~24h.</div>
       </div>
     </div>
@@ -182,6 +189,32 @@ footer .disc{max-width:640px;margin:10px auto 0;font-size:.78em;opacity:.75}
     </details>
 
     <button id="sync_btn" class="btn-sync" data-i18n="syncBtn">Sync wishlist</button>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="diffTitle">Wishlist diff</h2>
+    <p class="diff-sub" data-i18n="diffSub">Compare your HeyBox and Steam wishlists, then sync the differences you select.</p>
+    <button id="diff_btn" class="btn-sync" data-i18n="diffBtn">Compare wishlists</button>
+
+    <div id="diff_results" class="results">
+      <div class="summary">
+        <div class="stat"><div class="n" id="d_hb_only">0</div><div class="l" data-i18n="dHbOnly">HeyBox only</div></div>
+        <div class="stat"><div class="n" id="d_st_only">0</div><div class="l" data-i18n="dStOnly">Steam only</div></div>
+        <div class="stat"><div class="n" id="d_both">0</div><div class="l" data-i18n="dBoth">Both</div></div>
+      </div>
+
+      <div id="hb_wrap">
+        <div class="list-title"><label class="sel-all"><input type="checkbox" id="hb_all"><span data-i18n="hbOnlyTitle">HeyBox only → add to Steam</span></label></div>
+        <ul id="hb_only_list" class="game-list"></ul>
+      </div>
+
+      <div id="st_wrap">
+        <div class="list-title"><label class="sel-all"><input type="checkbox" id="st_all"><span data-i18n="stOnlyTitle">Steam only → remove from Steam</span></label></div>
+        <ul id="st_only_list" class="game-list"></ul>
+      </div>
+
+      <button id="apply_btn" class="btn-sync" data-i18n="applyBtn">Sync selected</button>
+    </div>
   </section>
 
   <div id="status" class="status"><span class="spin"></span><span id="status_text" data-i18n="statusIdle">Ready</span></div>
@@ -261,9 +294,9 @@ var I18N = {
     steamIdPh: "e.g. 7656119xxxxxxxxxx",
     steamIdHelp: "The 17-digit SteamID64 that owns the destination wishlist.",
     tokenLabel: "Steam Access Token",
-    tokenOpt: "(webapi_token — required to write)",
-    tokenPh: "webapi_token value",
+    tokenPh: "webapi_token",
     tokenHelp: "Log into Steam → open store.steampowered.com/pointssummary/ajaxgetasyncconfig → copy the webapi_token. Expires ~24h.",
+    reqTag: "(required to write)",
     dryRun: "Dry run (preview the diff only, write nothing)",
     advanced: "Advanced options",
     apiKeyLabel: "Steam API Key",
@@ -296,7 +329,7 @@ var I18N = {
     helpTitle: "Where do I get these credentials?",
     helpSteamH: "Steam",
     helpSteam1: "SteamID64 — from steamid.io or your profile URL.",
-    helpSteam2: "Access token — log into Steam, open the pointssummary/ajaxgetasyncconfig page, copy webapi_token.",
+    helpSteam2: "Access token (webapi_token) — log into Steam, open the pointssummary/ajaxgetasyncconfig page, copy webapi_token.",
     helpSteam3: "API key (optional) — steamcommunity.com/dev/apikey.",
     helpHeyboxH: "HeyBox (小黑盒)",
     helpHeybox1: "User ID — the numeric ID in your HeyBox profile or API requests.",
@@ -306,7 +339,20 @@ var I18N = {
     errNoBackend: "No backend detected. Run <code>python app.py</code> in the Hey2Steam project and open <code>http://localhost:5091</code>, or enter your backend URL under Advanced options.",
     errMissing: "HeyBox User ID and Steam ID are required.",
     errGeneric: "Sync failed: ",
-    dryRunNotice: "Dry-run mode: showing what would be added without writing anything."
+    dryRunNotice: "Dry-run mode: showing what would be added without writing anything.",
+    diffTitle: "Wishlist diff",
+    diffSub: "Compare your HeyBox and Steam wishlists, then sync the differences you select.",
+    diffBtn: "Compare wishlists",
+    dHbOnly: "HeyBox only",
+    dStOnly: "Steam only",
+    dBoth: "Both",
+    hbOnlyTitle: "HeyBox only → add to Steam",
+    stOnlyTitle: "Steam only → remove from Steam",
+    applyBtn: "Sync selected",
+    emptyDiff: "No differences.",
+    applyDone: "Added {added}, removed {removed}, failed {failed}.",
+    statusDiffing: "Comparing wishlists…",
+    statusApplying: "Applying changes…"
   },
   zh: {
     subtitle: "将你的小黑盒心愿单同步到 Steam",
@@ -320,9 +366,9 @@ var I18N = {
     steamIdPh: "例如 7656119xxxxxxxxxx",
     steamIdHelp: "拥有目标心愿单的 17 位 SteamID64。",
     tokenLabel: "Steam 访问令牌",
-    tokenOpt: "（webapi_token — 写入必需）",
-    tokenPh: "webapi_token 值",
+    tokenPh: "webapi_token",
     tokenHelp: "登录 Steam → 打开 store.steampowered.com/pointssummary/ajaxgetasyncconfig → 复制 webapi_token。约 24 小时过期。",
+    reqTag: "（写入必需）",
     dryRun: "演练（仅预览差异，不写入任何内容）",
     advanced: "高级选项",
     apiKeyLabel: "Steam API Key",
@@ -355,7 +401,7 @@ var I18N = {
     helpTitle: "这些凭据从哪里获取？",
     helpSteamH: "Steam",
     helpSteam1: "SteamID64 — 从 steamid.io 或你的个人主页 URL 获取。",
-    helpSteam2: "访问令牌 — 登录 Steam，打开 pointssummary/ajaxgetasyncconfig 页面，复制 webapi_token。",
+    helpSteam2: "访问令牌（webapi_token）— 登录 Steam，打开 pointssummary/ajaxgetasyncconfig 页面，复制 webapi_token。",
     helpSteam3: "API key（可选）— steamcommunity.com/dev/apikey。",
     helpHeyboxH: "小黑盒（HeyBox）",
     helpHeybox1: "用户 ID — 个人主页或 API 请求中的数字 ID。",
@@ -365,7 +411,20 @@ var I18N = {
     errNoBackend: "未检测到后端。请在 Hey2Steam 项目中运行 <code>python app.py</code> 并打开 <code>http://localhost:5091</code>，或在「高级选项」中填写你的后端地址。",
     errMissing: "小黑盒用户 ID 和 Steam ID 为必填项。",
     errGeneric: "同步失败：",
-    dryRunNotice: "演练模式：仅展示将要添加的内容，不写入任何内容。"
+    dryRunNotice: "演练模式：仅展示将要添加的内容，不写入任何内容。",
+    diffTitle: "心愿单差异",
+    diffSub: "对比你的小黑盒与 Steam 心愿单，然后同步你选择的差异项。",
+    diffBtn: "对比心愿单",
+    dHbOnly: "仅小黑盒有",
+    dStOnly: "仅 Steam 有",
+    dBoth: "两边都有",
+    hbOnlyTitle: "仅小黑盒有 → 加入 Steam",
+    stOnlyTitle: "仅 Steam 有 → 从 Steam 移除",
+    applyBtn: "同步所选",
+    emptyDiff: "无差异。",
+    applyDone: "已添加 {added}，已移除 {removed}，失败 {failed}。",
+    statusDiffing: "正在对比心愿单…",
+    statusApplying: "正在应用更改…"
   }
 };
 
@@ -491,9 +550,8 @@ function buildPayload(){
   return {
     heybox_id: val("heybox_id"),
     steamid: val("steamid"),
-    steam_access_token: val("steam_access_token"),
     steam_api_key: val("steam_api_key"),
-    steam_sessionid: null,
+    steam_access_token: val("steam_access_token"),
     heybox_imei: val("imei"),
     heybox_pkey: null,
     sign_algo: val("sign_algo") || "web",
@@ -563,17 +621,187 @@ function escapeHtml(s){
 }
 
 // ---------------------------------------------------------------------------
+// Diff & selective sync
+// ---------------------------------------------------------------------------
+function hideDiffResults(){ $("diff_results").classList.remove("show"); }
+
+function renderDiffItem(item, side){
+  var li = document.createElement("li");
+  var label = document.createElement("label");
+  label.className = "diff-item";
+  var cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.className = "diff-cb";
+  cb.value = item.appid;
+  cb.dataset.side = side;
+  cb.dataset.name = item.name || "";
+  cb.addEventListener("change", updateApplyBtn);
+  var nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = item.name || ("appid " + item.appid);
+  var id = document.createElement("span");
+  id.className = "id";
+  id.textContent = "appid " + item.appid;
+  label.appendChild(cb);
+  label.appendChild(nm);
+  label.appendChild(id);
+  li.appendChild(label);
+  return li;
+}
+
+function renderDiffList(listId, items, side){
+  var ul = $(listId);
+  ul.innerHTML = "";
+  if (!items.length){
+    var li = document.createElement("li");
+    var s = document.createElement("span");
+    s.className = "empty-msg";
+    s.textContent = t("emptyDiff");
+    li.appendChild(s);
+    ul.appendChild(li);
+    return;
+  }
+  items.forEach(function(it){ ul.appendChild(renderDiffItem(it, side)); });
+}
+
+function showDiff(d){
+  $("diff_results").classList.add("show");
+  $("d_hb_only").textContent = (d.heybox_only || []).length;
+  $("d_st_only").textContent = (d.steam_only || []).length;
+  $("d_both").textContent = d.both_count || 0;
+
+  renderDiffList("hb_only_list", d.heybox_only || [], "hb");
+  renderDiffList("st_only_list", d.steam_only || [], "st");
+
+  $("hb_wrap").style.display = (d.heybox_only || []).length ? "block" : "none";
+  $("st_wrap").style.display = (d.steam_only || []).length ? "block" : "none";
+
+  $("hb_all").checked = false;
+  $("st_all").checked = false;
+  updateApplyBtn();
+}
+
+function setGroup(side, checked){
+  document.querySelectorAll(".diff-cb[data-side='" + side + "']").forEach(function(cb){
+    cb.checked = checked;
+  });
+  updateApplyBtn();
+}
+
+function updateApplyBtn(){
+  var n = document.querySelectorAll(".diff-cb:checked").length;
+  var btn = $("apply_btn");
+  btn.textContent = t("applyBtn") + (n ? " (" + n + ")" : "");
+  btn.disabled = n === 0;
+}
+
+function collectSelected(side){
+  var items = [];
+  document.querySelectorAll(".diff-cb[data-side='" + side + "']:checked").forEach(function(cb){
+    items.push({ appid: parseInt(cb.value, 10), name: cb.dataset.name || "" });
+  });
+  return items;
+}
+
+async function runDiff(){
+  clearNotice();
+  hideDiffResults();
+  if (!val("heybox_id") || !val("steamid")){
+    showNotice("errMissing");
+    return;
+  }
+  var btn = $("diff_btn");
+  btn.disabled = true;
+  setStatus("statusBackend");
+  try{
+    var hasBackend = await detectBackend();
+    if (!hasBackend){
+      btn.disabled = false;
+      hideStatus();
+      showNotice("errNoBackend");
+      return;
+    }
+    setStatus("statusDiffing");
+    var resp = await fetch(backendBase() + "/api/diff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload())
+    });
+    var data;
+    try{ data = await resp.json(); } catch(e){ throw new Error("HTTP " + resp.status); }
+    if (!resp.ok){ throw new Error(data && data.error ? data.error : ("HTTP " + resp.status)); }
+    showDiff(data);
+    setStatus("statusDone");
+    setTimeout(hideStatus, 1200);
+  }catch(err){
+    var el = $("notice");
+    el.innerHTML = t("errGeneric") + escapeHtml(String(err && err.message ? err.message : err));
+    el.classList.add("show");
+    hideStatus();
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+async function applySelected(){
+  var toAdd = collectSelected("hb");
+  var toRemove = collectSelected("st");
+  if (!toAdd.length && !toRemove.length) return;
+
+  var btn = $("apply_btn");
+  btn.disabled = true;
+  setStatus("statusApplying");
+
+  try{
+    var resp = await fetch(backendBase() + "/api/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to_add: toAdd,
+        to_remove: toRemove,
+        steam_access_token: val("steam_access_token"),
+        dry_run: $("dry_run").checked
+      })
+    });
+    var data;
+    try{ data = await resp.json(); } catch(e){ throw new Error("HTTP " + resp.status); }
+    if (!resp.ok){ throw new Error(data && data.error ? data.error : ("HTTP " + resp.status)); }
+
+    var added = (data.added || []).length;
+    var removed = (data.removed || []).length;
+    var failed = (data.failed_add || []).length + (data.failed_remove || []).length;
+    var el = $("notice");
+    el.innerHTML = escapeHtml(t("applyDone").replace("{added}", added).replace("{removed}", removed).replace("{failed}", failed));
+    el.classList.add("show");
+    setStatus("statusDone");
+    setTimeout(hideStatus, 1200);
+  }catch(err){
+    var el = $("notice");
+    el.innerHTML = t("errGeneric") + escapeHtml(String(err && err.message ? err.message : err));
+    el.classList.add("show");
+    hideStatus();
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 document.getElementById("lang-en").addEventListener("click", function(){ setLang("en"); });
 document.getElementById("lang-zh").addEventListener("click", function(){ setLang("zh"); });
 $("sync_btn").addEventListener("click", runSync);
+$("diff_btn").addEventListener("click", runDiff);
+$("apply_btn").addEventListener("click", applySelected);
+$("hb_all").addEventListener("change", function(){ setGroup("hb", this.checked); });
+$("st_all").addEventListener("change", function(){ setGroup("st", this.checked); });
 document.querySelectorAll("input").forEach(function(inp){
   inp.addEventListener("keydown", function(e){ if (e.key === "Enter") runSync(); });
 });
 
 setLang(currentLang);
 resetResults();
+updateApplyBtn();
 })();
 </script>
 </body>

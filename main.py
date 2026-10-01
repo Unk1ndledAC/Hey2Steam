@@ -44,10 +44,6 @@ def build_parser():
         help="Steam webapi_token, required to write (or STEAM_ACCESS_TOKEN)",
     )
     parser.add_argument(
-        "--steam-sessionid",
-        help="Legacy store sessionid fallback (or STEAM_SESSIONID)",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Compute the diff without adding anything to Steam",
@@ -69,10 +65,10 @@ def main(argv=None):
         return 1
 
     access_token = _env_or("STEAM_ACCESS_TOKEN", args.steam_access_token)
-    if not args.dry_run and not access_token and not args.steam_sessionid:
+    if not args.dry_run and not access_token:
         print(
-            "error: adding to the Steam wishlist requires an access token "
-            "(--steam-access-token / STEAM_ACCESS_TOKEN) or a sessionid.",
+            "error: adding to the Steam wishlist requires a webapi_token "
+            "(--steam-access-token / STEAM_ACCESS_TOKEN).",
             file=sys.stderr,
         )
         return 1
@@ -86,7 +82,6 @@ def main(argv=None):
             steamid=steamid,
             steam_access_token=access_token,
             steam_api_key=_env_or("STEAM_API_KEY", args.steam_api_key),
-            steam_sessionid=_env_or("STEAM_SESSIONID", args.steam_sessionid),
             heybox_imei=_env_or("HEYBOX_IMEI", args.heybox_imei),
             heybox_pkey=_env_or("HEYBOX_PKEY", args.heybox_pkey),
             sign_algo=_env_or("HEYBOX_SIGN_ALGO", args.sign_algo),
